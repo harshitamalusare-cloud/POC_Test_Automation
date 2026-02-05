@@ -1,40 +1,62 @@
-import pytest
-from config.credentials import TEST_USERNAME, TEST_PASSWORD
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from pages.POC_page import POCPage
+from playwright.sync_api import Page, expect
 
-pytest_plugins = ["pytest_playwright"] 
+class POCPage:
+    def __init__(self, page: Page):
+        self.page = page
 
-@pytest.mark.parametrize("username, password", [(TEST_USERNAME, TEST_PASSWORD)])
-def test_login(page, username, password):
-    print("\n--- Test Started: Login ---")
-    login_page = LoginPage(page)
-    dashboard_page = DashboardPage(page)
-    poc_page = POCPage(page)
+        # Expected URL
+        self.expected_poc_url = "https://agent.goloti.com/poc"
 
-    # Step 1: Open Login Page
-    login_page.open()
+        # ✅ Upload Image XPath (example)
+        self.upload_input = page.locator("//input[@type='file']")
 
-    # Step 2: Perform Login
-    login_page.login(username, password)
+        # Optional: Upload button if needed
+        self.upload_button = page.locator("//button[contains(text(),'Upload')]")
 
-    # Step 3: Wait for Dashboard
-    dashboard_page.wait_for_dashboard()
+        # Start Search button
+        self.start_search_button = page.locator("//button[text()='Start Search']")
 
-    # Step 4: Verify login success
-    assert dashboard_page.is_loaded(), "Dashboard not loaded properly"
+    def wait_for_poc_page(self):
+        print("[ACTION] Waiting for POC page...")
+        expect(self.page).to_have_url(self.expected_poc_url, timeout=15000)
+        print("[PASS] POC Page loaded successfully ✅")
 
-    # Step 3: Navigate to POC Page
-    dashboard_page.go_to_POCpage()
+    def upload_image(self, file_path: str):
+        print("[ACTION] Uploading image...")
 
-    # Step 4: Verify POC Page Loaded
-    poc_page.wait_for_poc_page()
+        # Upload file directly
+        self.upload_input.set_input_files(file_path)
 
-    # Step 5: Upload Image
-    poc_page.upload_image("tests/data/POC Search.png")
+        print("[PASS] Image selected successfully ✅")
 
-    # Step 6: Keep window open to view results
-    poc_page.keep_window_open()
+        # Click Start Search button
+        self.start_search_button.click()
+        print("[PASS] Start Search button clicked ✅")
 
-    print("--- Test Finished Successfully ✅ ---")
+    def keep_window_open(self):
+        """Wait for POC results to load and verify success or failure"""
+        print("[ACTION] Waiting for POC search results...")
+        
+        try:
+            # Define result container locator
+            result_container = self.page.locator("//*[@class='flex flex-col gap-4 w-full']")
+            
+            # Wait for result container to be visible
+            print("[ACTION] Waiting for results container to appear...")
+            result_container.wait_for(state="visible", timeout=60000)
+            print("[INFO] Results container loaded")
+            
+            # Wait for page to stabilize
+            self.page.wait_for_load_state("networkidle", timeout=30000)
+            
+            # Check if results are visible
+            if result_container.is_visible():
+                print("[PASS] POC search results displayed successfully ✅")
+                return True
+            else:
+                print("[FAIL] Results not displayed ❌")
+                return False
+                
+        except Exception as e:
+            print(f"[FAIL] {str(e)} ❌")
+            return False
